@@ -1,0 +1,15 @@
+{
+  "name": "fdp-cabin-crew",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "FDP calculator for cabin crew (TG CCM 1.7, Issue 02 Rev 03)",
+  "scripts": {
+    "test": "node --test",
+    "serve": "node scripts/serve.js"
+  },
+  "devDependencies": {
+    "luxon": "3.7.2",
+    "@fontsource/noto-sans-thai": "5.2.6"
+  }
+}

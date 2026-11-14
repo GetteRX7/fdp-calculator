@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>FDP ลูกเรือ</title>
+  <meta name="description" content="คำนวณ FDP, in-flight rest และ rest ขั้นต่ำสำหรับลูกเรือ ตาม CCM 1.7 Issue 02 Rev 03">
+  <meta name="theme-color" content="#3b2a6b">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%233b2a6b'/%3E%3Cpath d='M6 19l20-7-3 3-7 2-4 6h-2l2-5-4 1z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div class="app">
+    <div class="banner" id="banner" role="alert">
+      <span>⚠️ เครื่องมือช่วยประมาณการ ใช้ตรวจทานเท่านั้น — ค่าที่ผูกพันคือ OP-1 / roster / คู่มือฉบับจริง ถ้าตัวเลขไม่ตรง ให้ยึดคู่มือ</span>
+      <button type="button" class="banner-close" id="bannerClose" aria-label="ปิดแถบเตือน">✕</button>
+    </div>
+
+    <header class="topbar">
+      <h1>FDP ลูกเรือ</h1>
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" data-view="input" class="tab active">กรอก</button>
+        <button type="button" role="tab" data-view="result" class="tab">ผล</button>
+        <button type="button" role="tab" data-view="planner" class="tab">ตารางพัก–FDP</button>
+      </nav>
+    </header>
+
+    <!-- ============ 3.1 Input ============ -->
+    <main id="view-input" class="view active">
+      <div id="sectorList"></div>
+
+      <div class="row-btns">
+        <button type="button" class="btn" id="addSector">＋ Add Sector</button>
+        <button type="button" class="btn ghost" id="clearAll">ล้างทั้งหมด</button>
+      </div>
+      <button type="button" class="link-btn" id="loadExample">โหลดตัวอย่าง (TG916 / TG917)</button>
+
+      <section class="panel" id="reportPanel">
+        <h2>เวลา report <span class="ref">CCM 1.7</span></h2>
+        <p class="hint">เติมอัตโนมัติ: เริ่มที่ BKK = STD − 2:00 · line station / positioning = STD − 1:15 · แก้ทับได้ (เวลาท้องถิ่นสถานีที่ report)</p>
+        <div id="reportList"></div>
+      </section>
+
+      <section class="panel">
+        <label class="switch">
+          <input type="checkbox" id="delayMode">
+          <span>Delay / Unforeseen</span>
+        </label>
+        <div id="delayList" hidden></div>
+      </section>
+
+      <div class="global-msgs" id="globalMsgs"></div>
+
+      <div class="cta">
+        <button type="button" class="btn primary big" id="calcBtn">คำนวณ</button>
+        <button type="button" class="btn big" id="plannerBtn">ตารางพัก–FDP</button>
+      </div>
+    </main>
+
+    <!-- ============ 3.2 Results ============ -->
+    <main id="view-result" class="view">
+      <div id="resultList"></div>
+      <button type="button" class="btn" id="copyBtn">📋 คัดลอกสรุป</button>
+      <span class="copy-status" id="copyStatus" aria-live="polite"></span>
+    </main>
+
+    <!-- ============ 3.3 Rest–FDP planner ============ -->
+    <main id="view-planner" class="view">
+      <section class="panel">
+        <label class="field">
+          <span>Duty</span>
+          <select id="plDuty"></select>
+        </label>
+        <div class="grid2">
+          <label class="field">
+            <span>Class rest facility</span>
+            <select id="plClass">
+              <option value="1">Class 1</option>
+              <option value="2">Class 2</option>
+              <option value="3">Class 3</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>พักต่อคน (H:MM)</span>
+            <input id="plRest" inputmode="numeric" placeholder="2:00" autocomplete="off">
+          </label>
+        </div>
+        <div id="plOut" class="out"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Standby รายคน <span class="ref">CCM 1.7</span></h2>
+        <div id="sbList"></div>
+        <button type="button" class="btn" id="addStandby">＋ เพิ่มคน standby</button>
+      </section>
+
+      <section class="panel">
+        <h2>พักต่อคน × Class → Max Extended FDP <span class="ref">Table 1.7.7</span></h2>
+        <div class="table-wrap"><table class="ref-table" id="refTable"></table></div>
+        <p class="hint">ใช้ได้เฉพาะ Method 2: ไม่เกิน 3 sectors · พักเป็นช่วงติดกันไม่ตัดแบ่ง · เวลาพักนับเป็น FDP เต็มจำนวน</p>
+        <p class="hint">FDP จริงยังถูกจำกัดด้วยการเสริมนักบินและ class ที่นักบินใช้ด้วย (เพดานหน้าจอลูกเรือ 18:00 · ฝั่งนักบิน 14–17 ชม. +1 ชม. ได้เมื่อมี 1 sector บินต่อเนื่อง &gt;9 ชม. และ ≤2 sectors)</p>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span id="revLabel">กติกาตาม CCM Issue 02 Rev 03</span>
+      <button type="button" class="link-btn" id="clearDraft">ล้าง draft ที่บันทึกไว้</button>
+    </footer>
+  </div>
+
+  <template id="sectorTpl">
+    <div class="sector">
+      <div class="sector-head">
+        <span class="sector-no"></span>
+        <span class="duty-badge"></span>
+        <button type="button" class="icon-btn del" aria-label="ลบ sector">🗑</button>
+      </div>
+      <div class="grid2">
+        <label class="field">
+          <span>เที่ยวบิน</span>
+          <input data-k="flightNo" placeholder="TG916" autocomplete="off" autocapitalize="characters">
+        </label>
+        <label class="field">
+          <span>วันที่ออก</span>
+          <input data-k="dateDep" type="date">
+          <small class="err" data-err="dateDep"></small>
+        </label>
+      </div>
+      <div class="grid2">
+        <div class="field ac">
+          <span>ต้นทาง</span>
+          <input data-k="from" data-ac placeholder="BKK / กรุงเทพ" autocomplete="off" autocapitalize="characters" role="combobox" aria-expanded="false">
+          <small class="ac-label" data-label="from"></small>
+          <small class="err" data-err="from"></small>
+          <ul class="ac-list" hidden></ul>
+        </div>
+        <div class="field ac">
+          <span>ปลายทาง</span>
+          <input data-k="to" data-ac placeholder="LHR / ลอนดอน" autocomplete="off" autocapitalize="characters" role="combobox" aria-expanded="false">
+          <small class="ac-label" data-label="to"></small>
+          <small class="err" data-err="to"></small>
+          <ul class="ac-list" hidden></ul>
+        </div>
+      </div>
+      <div class="grid3">
+        <label class="field">
+          <span>STD (ท้องถิ่น)</span>
+          <input data-k="std" type="time">
+          <small class="err" data-err="std"></small>
+        </label>
+        <label class="field">
+          <span>STA (ท้องถิ่น)</span>
+          <input data-k="sta" type="time">
+        </label>
+        <label class="field">
+          <span>วัน STA</span>
+          <select data-k="staDayOffset">
+            <option value="0">+0</option>
+            <option value="1">+1</option>
+          </select>
+        </label>
+      </div>
+      <small class="err" data-err="sta"></small>
+      <label class="field">
+        <span>Class rest facility</span>
+        <select data-k="restClass">
+          <option value="1">Class 1</option>
+          <option value="2">Class 2</option>
+          <option value="3">Class 3</option>
+          <option value="0">ไม่มี</option>
+        </select>
+      </label>
+      <div class="checks">
+        <label class="check"><input type="checkbox" data-k="positioning"> Positioning</label>
+        <label class="check"><input type="checkbox" data-k="newDuty"> เริ่ม Duty ใหม่</label>
+      </div>
+      <small class="warn-msg" data-warn></small>
+    </div>
+  </template>
+
+  <script type="module" src="js/ui.js"></script>
+</body>
+</html>
